@@ -10,6 +10,7 @@ export class TokensCommand extends Command<any> {
   args = Proxy();
 
   async execute() {
-    this.context.stdout.write(`${JSON.stringify(this.cli.process(this.args).tokens, null, 2)}\n`);
+    const command = await this.cli.process(this.args);
+    this.context.stdout.write(`${JSON.stringify(command.tokens, null, 2)}\n`);
   }
 }

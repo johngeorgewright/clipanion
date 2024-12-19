@@ -35,10 +35,20 @@ export type WithArity<Type extends {length?: number}, Arity extends number> =
           : Tuple<Type, Arity>
     : Type;
 
+export type Resolver<T> = () => T | Promise<T>;
+
+function isResolver<T>(value: unknown): value is Resolver<T> {
+  return typeof value === `function`;
+}
+
+export async function resolve<T>(value: T | Resolver<T>): Promise<T> {
+  return isResolver(value) ? await value() : value;
+}
+
 export type CommandOption<T> = {
   [isOptionSymbol]: true,
   definition: <Context extends BaseContext>(builder: CommandBuilder<CliContext<Context>>, key: string) => void,
-  transformer: <Context extends BaseContext>(builder: CommandBuilder<CliContext<Context>>, key: string, state: RunState, context: Context) => T,
+  transformer: <Context extends BaseContext>(builder: CommandBuilder<CliContext<Context>>, key: string, state: RunState, context: Context) => Promise<T>,
 };
 
 export type CommandOptionReturn<T> = T;

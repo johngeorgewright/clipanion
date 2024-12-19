@@ -31,13 +31,13 @@ describe(`Advanced`, () => {
           async execute() {}
         });
 
-        expect(cli.process([`-h`]).path).toEqual([]);
+        await expect(cli.process([`-h`])).resolves.toHaveProperty(`path`, []);
 
         cli.register(Builtins.HelpCommand);
-        expect(cli.process([`-h`]).path).toEqual([`-h`]);
+        await expect(cli.process([`-h`])).resolves.toHaveProperty(`path`, [`-h`]);
 
-        expect(cli.process([`b`, `--help`]).path).toEqual([`b`]);
-        expect(cli.process([`b`, `one`, `--help`]).path).toEqual([`b`, `one`]);
+        await expect(cli.process([`b`, `--help`])).resolves.toHaveProperty(`path`, [`b`]);
+        await expect(cli.process([`b`, `one`, `--help`])).resolves.toHaveProperty(`path`, [`b`, `one`]);
       });
 
       it(`should display the usage`, async () => {
@@ -310,8 +310,8 @@ describe(`Advanced`, () => {
     }];
 
     for (const {input, tokens} of TOKEN_EXPECTATIONS) {
-      it(`should tokenize "${input.join(` `)}"`, () => {
-        expect(cli.process({input, partial: true}).tokens).toEqual(tokens);
+      it(`should tokenize "${input.join(` `)}"`, async () => {
+        await expect(cli.process({input, partial: true})).resolves.toHaveProperty(`tokens`, tokens);
       });
     }
   });
@@ -545,7 +545,7 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CommandA]);
 
-    expect(cli.process([], {env: {TEST_FOO: `bar`}})).toMatchObject({foo: `bar`});
+    await expect(cli.process([], {env: {TEST_FOO: `bar`}})).resolves.toMatchObject({foo: `bar`});
   });
 
   it(`overrides defaults with environment variables`, async () => {
@@ -559,7 +559,7 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CommandA]);
 
-    expect(cli.process([], {env: {TEST_FOO: `bar`}})).toMatchObject({foo: `bar`});
+    await expect(cli.process([], {env: {TEST_FOO: `bar`}})).resolves.toMatchObject({foo: `bar`});
   });
 
   it(`overrides environment variables with options`, async () => {
@@ -573,7 +573,7 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CommandA]);
 
-    expect(cli.process([`--foo=qux`], {env: {TEST_FOO: `bar`}})).toMatchObject({foo: `qux`});
+    await expect(cli.process([`--foo=qux`], {env: {TEST_FOO: `bar`}})).resolves.toMatchObject({foo: `qux`});
   });
 
   it(`supports strings that act like booleans if not bound to a value`, async () => {
@@ -595,18 +595,76 @@ describe(`Advanced`, () => {
 
     let cli = Cli.from([CommandA]);
 
-    expect(cli.process([])).toMatchObject({enableDebugger: false});
-    expect(cli.process([`--break`])).toMatchObject({enableDebugger: true});
-    expect(cli.process([`--no-break`])).toMatchObject({enableDebugger: false});
-    expect(cli.process([`--break=1234`])).toMatchObject({enableDebugger: `1234`});
-    expect(() => { cli.process([`--break`, `1234`]);}).toThrow(Error);
-    expect(() => { cli.process([`--no-break=1234`]);}).toThrow(Error);
+    await expect(cli.process([])).resolves.toMatchObject({enableDebugger: false});
+    await expect(cli.process([`--break`])).resolves.toMatchObject({enableDebugger: true});
+    await expect(cli.process([`--no-break`])).resolves.toMatchObject({enableDebugger: false});
+    await expect(cli.process([`--break=1234`])).resolves.toMatchObject({enableDebugger: `1234`});
+    await expect(cli.process([`--break`, `1234`])).rejects.toThrow(Error);
+    await expect(cli.process([`--no-break=1234`])).rejects.toThrow(Error);
 
     cli = Cli.from([InvertedCommandA]);
 
-    expect(cli.process([])).toMatchObject({enableDebugger: true});
-    expect(cli.process([`--break`])).toMatchObject({enableDebugger: true});
-    expect(cli.process([`--no-break`])).toMatchObject({enableDebugger: false});
+    await expect(cli.process([])).resolves.toMatchObject({enableDebugger: true});
+    await expect(cli.process([`--break`])).resolves.toMatchObject({enableDebugger: true});
+    await expect(cli.process([`--no-break`])).resolves.toMatchObject({enableDebugger: false});
+  });
+
+  it(`should support options with a default values`, async () => {
+    class CommandA extends Command {
+      foo = Option.String(`--foo`, `bar`);
+
+      async execute() {
+        log(this, [`foo`]);
+      }
+    }
+
+    const cli = Cli.from([CommandA]);
+
+    await expect(cli.process([])).resolves.toMatchObject({foo: `bar`});
+  });
+
+  it(`should support lazy option default values`, async () => {
+    class CommandA extends Command {
+      foo = Option.String(`--foo`, () => `bar`);
+
+      async execute() {
+        log(this, [`foo`]);
+      }
+    }
+
+    const cli = Cli.from([CommandA]);
+
+    await expect(cli.process([])).resolves.toMatchObject({foo: `bar`});
+  });
+
+  it(`should support lazy asynchronous default values`, async () => {
+    class CommandA extends Command {
+      foo = Option.String(`--foo`, async () => `bar`);
+
+      async execute() {
+        log(this, [`foo`]);
+      }
+    }
+
+    const cli = Cli.from([CommandA]);
+
+    await expect(cli.process([])).resolves.toMatchObject({foo: `bar`});
+  });
+
+  it(`will not call the default value function if the option is provided`, async () => {
+    const defaultValue = jest.fn(() => `default`);
+    class CommandA extends Command {
+      foo = Option.String(`--foo`, defaultValue);
+
+      async execute() {
+        log(this, [`foo`]);
+      }
+    }
+
+    const cli = Cli.from([CommandA]);
+
+    await expect(cli.process([`--foo`, `provided`])).resolves.toMatchObject({foo: `provided`});
+    expect(defaultValue).not.toHaveBeenCalled();
   });
 
   it(`should report the stacktrace when an error is thrown`, async () => {
@@ -657,7 +715,7 @@ describe(`Advanced`, () => {
     expect(usage).not.toContain(`thisNameIsntUsed`);
     expect(usage).toContain(`prettyName`);
 
-    const command = cli.process([`foo`]);
+    const command = await cli.process([`foo`]);
 
     expect((command as CommandA).thisNameIsntUsed).toEqual(`foo`);
   });
@@ -755,19 +813,19 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CommandA]);
 
-    expect(cli.process([])).toMatchObject({verbose: 0});
-    expect(cli.process([`-v`])).toMatchObject({verbose: 1});
-    expect(cli.process([`-vv`])).toMatchObject({verbose: 2});
-    expect(cli.process([`-vvv`])).toMatchObject({verbose: 3});
-    expect(cli.process([`-vvvv`])).toMatchObject({verbose: 4});
+    await expect(cli.process([])).resolves.toMatchObject({verbose: 0});
+    await expect(cli.process([`-v`])).resolves.toMatchObject({verbose: 1});
+    await expect(cli.process([`-vv`])).resolves.toMatchObject({verbose: 2});
+    await expect(cli.process([`-vvv`])).resolves.toMatchObject({verbose: 3});
+    await expect(cli.process([`-vvvv`])).resolves.toMatchObject({verbose: 4});
 
-    expect(cli.process([`-v`, `-v`])).toMatchObject({verbose: 2});
-    expect(cli.process([`--verbose`, `--verbose`])).toMatchObject({verbose: 2});
-    expect(cli.process([`-v`, `--verbose`])).toMatchObject({verbose: 2});
-    expect(cli.process([`--verbose`, `-v`])).toMatchObject({verbose: 2});
+    await expect(cli.process([`-v`, `-v`])).resolves.toMatchObject({verbose: 2});
+    await expect(cli.process([`--verbose`, `--verbose`])).resolves.toMatchObject({verbose: 2});
+    await expect(cli.process([`-v`, `--verbose`])).resolves.toMatchObject({verbose: 2});
+    await expect(cli.process([`--verbose`, `-v`])).resolves.toMatchObject({verbose: 2});
 
-    expect(cli.process([`-vvvv`, `--no-verbose`])).toMatchObject({verbose: 0});
-    expect(cli.process([`--no-verbose`, `-vvvv`])).toMatchObject({verbose: 4});
+    await expect(cli.process([`-vvvv`, `--no-verbose`])).resolves.toMatchObject({verbose: 0});
+    await expect(cli.process([`--no-verbose`, `-vvvv`])).resolves.toMatchObject({verbose: 4});
   });
 
   it(`should print flags with a description separately`, async () => {
@@ -796,7 +854,7 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([PointCommand]);
 
-    expect(cli.process([`--point`, `1`, `2`, `3`])).toMatchObject({point: [`1`, `2`, `3`]});
+    await expect(cli.process([`--point`, `1`, `2`, `3`])).resolves.toMatchObject({point: [`1`, `2`, `3`]});
   });
 
   it(`should extract tuples from complex options surrounded by rest arguments`, async () => {
@@ -810,10 +868,10 @@ describe(`Advanced`, () => {
 
     const point = {point: [`1`, `2`, `3`]};
 
-    expect(cli.process([`--point`, `1`, `2`, `3`])).toMatchObject(point);
-    expect(cli.process([`--point`, `1`, `2`, `3`, `thing1`, `thing2`])).toMatchObject(point);
-    expect(cli.process([`thing1`, `--point`, `1`, `2`, `3`, `thing2`])).toMatchObject(point);
-    expect(cli.process([`thing1`, `thing2`, `--point`, `1`, `2`, `3`])).toMatchObject(point);
+    await expect(cli.process([`--point`, `1`, `2`, `3`])).resolves.toMatchObject(point);
+    await expect(cli.process([`--point`, `1`, `2`, `3`, `thing1`, `thing2`])).resolves.toMatchObject(point);
+    await expect(cli.process([`thing1`, `--point`, `1`, `2`, `3`, `thing2`])).resolves.toMatchObject(point);
+    await expect(cli.process([`thing1`, `thing2`, `--point`, `1`, `2`, `3`])).resolves.toMatchObject(point);
   });
 
   it(`should throw acceptable errors when tuple length is not finite`, async () => {
@@ -869,7 +927,7 @@ describe(`Advanced`, () => {
       [`--point`, `1`, `-abcd`],
       [`--point`, `1`, `2`, `--bar=baz`],
     ]) {
-      expect(() => cli.process(args)).toThrow(error);
+      await expect(cli.process(args)).rejects.toThrow(error);
     }
   });
 
@@ -881,9 +939,9 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(cli.process([])).toMatchObject({include: []});
-    expect(cli.process([`--include`, `foo`])).toMatchObject({include: [`foo`]});
-    expect(cli.process([`--include`, `foo`, `--include`, `bar`])).toMatchObject({include: [`foo`, `bar`]});
+    await expect(cli.process([])).resolves.toMatchObject({include: []});
+    await expect(cli.process([`--include`, `foo`])).resolves.toMatchObject({include: [`foo`]});
+    await expect(cli.process([`--include`, `foo`, `--include`, `bar`])).resolves.toMatchObject({include: [`foo`, `bar`]});
   });
 
   it(`should extract tuple arrays from complex options`, async () => {
@@ -894,22 +952,22 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(cli.process([])).toMatchObject({position: []});
+    await expect(cli.process([])).resolves.toMatchObject({position: []});
 
-    expect(cli.process(
+    await expect(cli.process(
       [`--position`, `1`, `2`, `3`]
-    )).toMatchObject({position: [[`1`, `2`, `3`]]});
+    )).resolves.toMatchObject({position: [[`1`, `2`, `3`]]});
 
-    expect(cli.process([
+    await expect(cli.process([
       `--position`, `1`, `2`, `3`,
       `--position`, `4`, `5`, `6`,
-    ])).toMatchObject({position: [[`1`, `2`, `3`], [`4`, `5`, `6`]]});
+    ])).resolves.toMatchObject({position: [[`1`, `2`, `3`], [`4`, `5`, `6`]]});
 
-    expect(cli.process([
+    await expect(cli.process([
       `--position`, `1`, `2`, `3`,
       `--position`, `4`, `5`, `6`,
       `--position`, `7`, `8`, `9`,
-    ])).toMatchObject({position: [[`1`, `2`, `3`], [`4`, `5`, `6`], [`7`, `8`, `9`]]});
+    ])).resolves.toMatchObject({position: [[`1`, `2`, `3`], [`4`, `5`, `6`], [`7`, `8`, `9`]]});
   });
 
   it(`should support optional string positionals`, async () => {
@@ -920,8 +978,8 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([ThingCommand]);
 
-    expect(cli.process([])).toMatchObject({thing: undefined});
-    expect(cli.process([`hello`])).toMatchObject({thing: `hello`});
+    await expect(cli.process([])).resolves.toMatchObject({thing: undefined});
+    await expect(cli.process([`hello`])).resolves.toMatchObject({thing: `hello`});
   });
 
   it(`should support optional string positionals after required string positionals`, async () => {
@@ -933,8 +991,8 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(cli.process([`hello`])).toMatchObject({optionalThing: undefined});
-    expect(cli.process([`hello`, `world`])).toMatchObject({optionalThing: `world`});
+    await expect(cli.process([`hello`])).resolves.toMatchObject({optionalThing: undefined});
+    await expect(cli.process([`hello`, `world`])).resolves.toMatchObject({optionalThing: `world`});
   });
 
   it(`should support optional string positionals before required string positionals`, async () => {
@@ -946,8 +1004,8 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(cli.process([`hello`])).toMatchObject({optionalThing: undefined, requiredThing: `hello`});
-    expect(cli.process([`hello`, `world`])).toMatchObject({optionalThing: `hello`, requiredThing: `world`});
+    await expect(cli.process([`hello`])).resolves.toMatchObject({optionalThing: undefined, requiredThing: `hello`});
+    await expect(cli.process([`hello`, `world`])).resolves.toMatchObject({optionalThing: `hello`, requiredThing: `world`});
   });
 
 
@@ -975,17 +1033,17 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(cli.process([`dest`])).toMatchObject({
+    await expect(cli.process([`dest`])).resolves.toMatchObject({
       sources: [],
       destination: `dest`,
     });
 
-    expect(cli.process([`src`, `dest`])).toMatchObject({
+    await expect(cli.process([`src`, `dest`])).resolves.toMatchObject({
       sources: [`src`],
       destination: `dest`,
     });
 
-    expect(cli.process([`src1`, `src2`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `src2`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
     });
@@ -999,10 +1057,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(() => cli.process([])).toThrow();
-    expect(cli.process([`src1`])).toMatchObject({sources: [`src1`]});
-    expect(cli.process([`src1`, `src2`])).toMatchObject({sources: [`src1`, `src2`]});
-    expect(cli.process([`src1`, `src2`, `src3`])).toMatchObject({sources: [`src1`, `src2`, `src3`]});
+    await expect(cli.process([])).rejects.toThrow();
+    await expect(cli.process([`src1`])).resolves.toMatchObject({sources: [`src1`]});
+    await expect(cli.process([`src1`, `src2`])).resolves.toMatchObject({sources: [`src1`, `src2`]});
+    await expect(cli.process([`src1`, `src2`, `src3`])).resolves.toMatchObject({sources: [`src1`, `src2`, `src3`]});
   });
 
   it(`should support required positionals after rest arguments with a minimum required length`, async () => {
@@ -1014,16 +1072,16 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(() => cli.process([])).toThrow();
-    expect(() => cli.process([`src`])).toThrow();
-    expect(() => cli.process([`dest`])).toThrow();
+    await expect(cli.process([])).rejects.toThrow();
+    await expect(cli.process([`src`])).rejects.toThrow();
+    await expect(cli.process([`dest`])).rejects.toThrow();
 
-    expect(cli.process([`src`, `dest`])).toMatchObject({
+    await expect(cli.process([`src`, `dest`])).resolves.toMatchObject({
       sources: [`src`],
       destination: `dest`,
     });
 
-    expect(cli.process([`src1`, `src2`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `src2`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
     });
@@ -1041,49 +1099,49 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(cli.process([`src`, `dest`])).toMatchObject({
+    await expect(cli.process([`src`, `dest`])).resolves.toMatchObject({
       sources: [`src`],
       destination: `dest`,
       force: false,
       reflink: false,
     });
 
-    expect(cli.process([`src1`, `src2`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `src2`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
       force: false,
       reflink: false,
     });
 
-    expect(cli.process([`src1`, `--force`, `src2`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `--force`, `src2`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
       force: true,
       reflink: false,
     });
 
-    expect(cli.process([`src1`, `src2`, `--force`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `src2`, `--force`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
       force: true,
       reflink: false,
     });
 
-    expect(cli.process([`src1`, `src2`, `--reflink`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `src2`, `--reflink`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
       force: false,
       reflink: true,
     });
 
-    expect(cli.process([`src1`, `--reflink=always`, `src2`, `dest`])).toMatchObject({
+    await expect(cli.process([`src1`, `--reflink=always`, `src2`, `dest`])).resolves.toMatchObject({
       sources: [`src1`, `src2`],
       destination: `dest`,
       force: false,
       reflink: `always`,
     });
 
-    expect(() => cli.process([`dest`])).toThrow();
+    await expect(cli.process([`dest`])).rejects.toThrow();
   });
 
   it(`should support proxies`, async () => {
@@ -1094,10 +1152,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(cli.process([])).toMatchObject({args: []});
-    expect(cli.process([`foo`])).toMatchObject({args: [`foo`]});
-    expect(cli.process([`foo`, `--bar`])).toMatchObject({args: [`foo`, `--bar`]});
-    expect(cli.process([`foo`, `--bar`, `--baz=1`])).toMatchObject({args: [`foo`, `--bar`, `--baz=1`]});
+    await expect(cli.process([])).resolves.toMatchObject({args: []});
+    await expect(cli.process([`foo`])).resolves.toMatchObject({args: [`foo`]});
+    await expect(cli.process([`foo`, `--bar`])).resolves.toMatchObject({args: [`foo`, `--bar`]});
+    await expect(cli.process([`foo`, `--bar`, `--baz=1`])).resolves.toMatchObject({args: [`foo`, `--bar`, `--baz=1`]});
   });
 
   it(`should support proxies with a minimum required length`, async () => {
@@ -1108,10 +1166,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([CopyCommand]);
 
-    expect(() => cli.process([])).toThrow();
-    expect(cli.process([`foo`])).toMatchObject({args: [`foo`]});
-    expect(cli.process([`foo`, `--bar`])).toMatchObject({args: [`foo`, `--bar`]});
-    expect(cli.process([`foo`, `--bar`, `--baz=1`])).toMatchObject({args: [`foo`, `--bar`, `--baz=1`]});
+    await expect(cli.process([])).rejects.toThrow();
+    await expect(cli.process([`foo`])).resolves.toMatchObject({args: [`foo`]});
+    await expect(cli.process([`foo`, `--bar`])).resolves.toMatchObject({args: [`foo`, `--bar`]});
+    await expect(cli.process([`foo`, `--bar`, `--baz=1`])).resolves.toMatchObject({args: [`foo`, `--bar`, `--baz=1`]});
   });
 
   it(`should not allow negating options with arity 1 that already start with "--no-"`, async () => {
@@ -1122,10 +1180,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([FooCommand]);
 
-    expect(() => cli.process([`--no-redacted`])).not.toThrow();
-    expect(() => cli.process([`--redacted`])).toThrow(`Unsupported option name ("--redacted")`);
-    expect(() => cli.process([`--no-no-redacted`])).toThrow(`Unsupported option name ("--no-no-redacted")`);
-    expect(() => cli.process([`--no-no-no-redacted`])).toThrow(`Unsupported option name ("--no-no-no-redacted")`);
+    await expect(cli.process([`--no-redacted`])).resolves.not.toThrow();
+    await expect(cli.process([`--redacted`])).rejects.toThrow(`Unsupported option name ("--redacted")`);
+    await expect(cli.process([`--no-no-redacted`])).rejects.toThrow(`Unsupported option name ("--no-no-redacted")`);
+    await expect(cli.process([`--no-no-no-redacted`])).rejects.toThrow(`Unsupported option name ("--no-no-no-redacted")`);
   });
 
   it(`should extract required string options from complex options`, async () => {
@@ -1136,9 +1194,9 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(() => cli.process([])).toThrow(`Command not found; did you mean:`);
-    expect(cli.process([`--foo`, `bar`])).toMatchObject({foo: `bar`});
-    expect(cli.process([`--foo`, `bar`, `--foo`, `baz`])).toMatchObject({foo: `baz`});
+    await expect(cli.process([])).rejects.toThrow(`Command not found; did you mean:`);
+    await expect(cli.process([`--foo`, `bar`])).resolves.toMatchObject({foo: `bar`});
+    await expect(cli.process([`--foo`, `bar`, `--foo`, `baz`])).resolves.toMatchObject({foo: `baz`});
   });
 
   it(`should extract required array options from complex options`, async () => {
@@ -1149,9 +1207,9 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(() => cli.process([])).toThrow(`Command not found; did you mean:`);
-    expect(cli.process([`--foo`, `bar`])).toMatchObject({foo: [`bar`]});
-    expect(cli.process([`--foo`, `bar`, `--foo`, `baz`])).toMatchObject({foo: [`bar`, `baz`]});
+    await expect(cli.process([])).rejects.toThrow(`Command not found; did you mean:`);
+    await expect(cli.process([`--foo`, `bar`])).resolves.toMatchObject({foo: [`bar`]});
+    await expect(cli.process([`--foo`, `bar`, `--foo`, `baz`])).resolves.toMatchObject({foo: [`bar`, `baz`]});
   });
 
   it(`should extract required boolean options from complex options`, async () => {
@@ -1162,10 +1220,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(() => cli.process([])).toThrow(`Command not found; did you mean:`);
-    expect(cli.process([`--foo`])).toMatchObject({foo: true});
-    expect(cli.process([`--foo`, `--foo`])).toMatchObject({foo: true});
-    expect(cli.process([`--no-foo`])).toMatchObject({foo: false});
+    await expect(cli.process([])).rejects.toThrow(`Command not found; did you mean:`);
+    await expect(cli.process([`--foo`])).resolves.toMatchObject({foo: true});
+    await expect(cli.process([`--foo`, `--foo`])).resolves.toMatchObject({foo: true});
+    await expect(cli.process([`--no-foo`])).resolves.toMatchObject({foo: false});
   });
 
   it(`should extract required boolean options from complex options (multiple names)`, async () => {
@@ -1176,11 +1234,11 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(() => cli.process([])).toThrow(`Command not found; did you mean:`);
-    expect(cli.process([`--foo`])).toMatchObject({foo: true});
-    expect(cli.process([`-f`])).toMatchObject({foo: true});
-    expect(cli.process([`--foo`, `-f`])).toMatchObject({foo: true});
-    expect(cli.process([`--no-foo`])).toMatchObject({foo: false});
+    await expect(cli.process([])).rejects.toThrow(`Command not found; did you mean:`);
+    await expect(cli.process([`--foo`])).resolves.toMatchObject({foo: true});
+    await expect(cli.process([`-f`])).resolves.toMatchObject({foo: true});
+    await expect(cli.process([`--foo`, `-f`])).resolves.toMatchObject({foo: true});
+    await expect(cli.process([`--no-foo`])).resolves.toMatchObject({foo: false});
   });
 
   it(`should extract required counter options from complex options`, async () => {
@@ -1191,10 +1249,10 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([IncludeCommand]);
 
-    expect(() => cli.process([])).toThrow(`Command not found; did you mean:`);
-    expect(cli.process([`--foo`])).toMatchObject({foo: 1});
-    expect(cli.process([`--foo`, `--foo`])).toMatchObject({foo: 2});
-    expect(cli.process([`--no-foo`])).toMatchObject({foo: 0});
+    await expect(cli.process([])).rejects.toThrow(`Command not found; did you mean:`);
+    await expect(cli.process([`--foo`])).resolves.toMatchObject({foo: 1});
+    await expect(cli.process([`--foo`, `--foo`])).resolves.toMatchObject({foo: 2});
+    await expect(cli.process([`--no-foo`])).resolves.toMatchObject({foo: 0});
   });
 
   it(`should disambiguate commands by required options`, async () => {
@@ -1341,8 +1399,8 @@ describe(`Advanced`, () => {
 
     const cli = Cli.from([PointCommand]);
 
-    expect(cli.process([`--point`])).toMatchObject({point: true});
-    expect(cli.process([`--thing`, `--thing`, `--no-thing`, `--thing`])).toMatchObject({thing: [true, true, false, true]});
+    await expect(cli.process([`--point`])).resolves.toMatchObject({point: true});
+    await expect(cli.process([`--thing`, `--thing`, `--no-thing`, `--thing`])).resolves.toMatchObject({thing: [true, true, false, true]});
   });
 
   it(`should validate the command when it has a schema`, async () => {

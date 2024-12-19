@@ -33,7 +33,7 @@ export function Counter(descriptor: string, initialValueBase: CounterFlags | num
       });
     },
 
-    transformer(builder, key, state) {
+    async transformer(builder, key, state) {
       let currentValue = initialValue;
 
       for (const {name, value} of state.options) {

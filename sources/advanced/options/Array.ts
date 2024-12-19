@@ -1,6 +1,6 @@
-import {StrictValidator}                                                                                         from "typanion";
+import {StrictValidator}                                                                                                            from "typanion";
 
-import {applyValidator, GeneralOptionFlags, CommandOptionReturn, rerouteArguments, makeCommandOption, WithArity} from "./utils";
+import {applyValidator, GeneralOptionFlags, CommandOptionReturn, rerouteArguments, makeCommandOption, WithArity, Resolver, resolve} from "./utils";
 
 export type ArrayFlags<T, Arity extends number = 1> = GeneralOptionFlags & {
   arity?: Arity,
@@ -17,8 +17,8 @@ export type ArrayFlags<T, Arity extends number = 1> = GeneralOptionFlags & {
  */
 export function Array<T extends {} = string, Arity extends number = 1>(descriptor: string, opts: ArrayFlags<T, Arity> & {required: true}): CommandOptionReturn<Array<WithArity<T, Arity>>>;
 export function Array<T extends {} = string, Arity extends number = 1>(descriptor: string, opts?: ArrayFlags<T, Arity>): CommandOptionReturn<Array<WithArity<T, Arity>> | undefined>;
-export function Array<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: Array<WithArity<string, Arity>>, opts?: Omit<ArrayFlags<T, Arity>, 'required'>): CommandOptionReturn<Array<WithArity<T, Arity>>>;
-export function Array<T = string, Arity extends number = 1>(descriptor: string, initialValueBase: ArrayFlags<T, Arity> | Array<WithArity<string, Arity>> | undefined, optsBase?: ArrayFlags<T, Arity>) {
+export function Array<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: Array<WithArity<string, Arity>> | Resolver<Array<WithArity<string, Arity>>>, opts?: Omit<ArrayFlags<T, Arity>, 'required'>): CommandOptionReturn<Array<WithArity<T, Arity>>>;
+export function Array<T = string, Arity extends number = 1>(descriptor: string, initialValueBase: ArrayFlags<T, Arity> | Array<WithArity<string, Arity>> | Resolver<Array<WithArity<string, Arity>>> | undefined, optsBase?: ArrayFlags<T, Arity>) {
   const [initialValue, opts] = rerouteArguments(initialValueBase, optsBase ?? {});
   const {arity = 1} = opts;
 
@@ -38,20 +38,22 @@ export function Array<T = string, Arity extends number = 1>(descriptor: string, 
       });
     },
 
-    transformer(builder, key, state) {
+    async transformer(builder, key, state) {
+      let currentValue: Array<WithArity<string, Arity>> | undefined;
       let usedName;
-      let currentValue = typeof initialValue !== `undefined`
-        ? [...initialValue]
-        : undefined;
 
       for (const {name, value} of state.options) {
         if (!nameSet.has(name))
           continue;
 
         usedName = name;
-        currentValue = currentValue ?? [];
+        currentValue ??= [];
         currentValue.push(value);
       }
+
+      currentValue ??= typeof initialValue !== `undefined`
+        ? [...await resolve(initialValue)]
+        : undefined;
 
       if (typeof currentValue !== `undefined`) {
         return applyValidator(usedName ?? key, currentValue, opts.validator);

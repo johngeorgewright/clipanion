@@ -155,7 +155,7 @@ export type MiniCli<Context extends BaseContext> = CliOptions & {
    *
    * @returns The compiled `Command`, with its properties populated with the arguments.
    */
-  process(input: Array<string>, context?: Partial<Context>): Command<Context>;
+  process(input: Array<string>, context?: Partial<Context>): Promise<Command<Context>>;
 
   /**
    * Runs a command.
@@ -428,10 +428,10 @@ export class Cli<Context extends BaseContext = BaseContext> implements Omit<Mini
     });
   }
 
-  process(opts: ProcessOptions<Context>): Command<Context>;
-  process(input: Array<string>, context: VoidIfEmpty<Omit<Context, keyof BaseContext>>): Command<Context>;
-  process(input: Array<string>, context: MakeOptional<Context, keyof BaseContext>): Command<Context>;
-  process(opts: Array<string> | ProcessOptions<Context>, contextArg?: any) {
+  process(opts: ProcessOptions<Context>): Promise<Command<Context>>;
+  process(input: Array<string>, context: VoidIfEmpty<Omit<Context, keyof BaseContext>>): Promise<Command<Context>>;
+  process(input: Array<string>, context: MakeOptional<Context, keyof BaseContext>): Promise<Command<Context>>;
+  async process(opts: Array<string> | ProcessOptions<Context>, contextArg?: any) {
     const {input, context: userContext, partial}: ProcessOptions<Context> = typeof opts === `object` && Array.isArray(opts)
       ? {input: opts as any as Array<string>, context: contextArg}
       : opts;
@@ -467,7 +467,7 @@ export class Cli<Context extends BaseContext = BaseContext> implements Omit<Mini
 
         try {
           for (const [key, {transformer}] of record.specs.entries())
-            (command as any)[key] = transformer(record.builder, key, state, context);
+            (command as any)[key] = await transformer(record.builder, key, state, context);
 
           return command;
         } catch (error: any) {
@@ -494,7 +494,7 @@ export class Cli<Context extends BaseContext = BaseContext> implements Omit<Mini
       command = input;
     } else {
       try {
-        command = this.process(input, context);
+        command = await this.process(input, context);
       } catch (error) {
         context.stdout.write(this.error(error, {colored}));
         return 1;

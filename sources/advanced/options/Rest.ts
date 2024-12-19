@@ -29,7 +29,7 @@ export function Rest(opts: RestFlags = {}) {
       });
     },
 
-    transformer(builder, key, state) {
+    async transformer(builder, key, state) {
       // The builder's arity.extra will always be NoLimits,
       // because it is set when we call registerDefinition
 

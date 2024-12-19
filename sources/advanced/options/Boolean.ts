@@ -1,4 +1,4 @@
-import {CommandOptionReturn, GeneralOptionFlags, makeCommandOption, rerouteArguments} from "./utils";
+import {CommandOptionReturn, GeneralOptionFlags, Resolver, makeCommandOption, rerouteArguments, resolve} from "./utils";
 
 export type BooleanFlags = GeneralOptionFlags;
 
@@ -11,8 +11,8 @@ export type BooleanFlags = GeneralOptionFlags;
  */
 export function Boolean(descriptor: string, opts: BooleanFlags & {required: true}): CommandOptionReturn<boolean>;
 export function Boolean(descriptor: string, opts?: BooleanFlags): CommandOptionReturn<boolean | undefined>;
-export function Boolean(descriptor: string, initialValue: boolean, opts?: Omit<BooleanFlags, 'required'>): CommandOptionReturn<boolean>;
-export function Boolean(descriptor: string, initialValueBase: BooleanFlags | boolean | undefined, optsBase?: BooleanFlags) {
+export function Boolean(descriptor: string, initialValue: boolean | Resolver<boolean>, opts?: Omit<BooleanFlags, 'required'>): CommandOptionReturn<boolean>;
+export function Boolean(descriptor: string, initialValueBase: BooleanFlags | boolean | Resolver<boolean> | undefined, optsBase?: BooleanFlags) {
   const [initialValue, opts] = rerouteArguments(initialValueBase, optsBase ?? {});
 
   const optNames = descriptor.split(`,`);
@@ -32,8 +32,8 @@ export function Boolean(descriptor: string, initialValueBase: BooleanFlags | boo
       });
     },
 
-    transformer(builer, key, state) {
-      let currentValue = initialValue;
+    async transformer(builer, key, state) {
+      let currentValue: boolean | undefined;
 
       for (const {name, value} of state.options) {
         if (!nameSet.has(name))
@@ -41,6 +41,8 @@ export function Boolean(descriptor: string, initialValueBase: BooleanFlags | boo
 
         currentValue = value;
       }
+
+      currentValue ??= await resolve(initialValue);
 
       return currentValue;
     },

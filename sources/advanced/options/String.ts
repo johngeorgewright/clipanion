@@ -1,8 +1,8 @@
-import {StrictValidator}                                                                                         from "typanion";
+import {StrictValidator}                                                                                                            from "typanion";
 
-import {NoLimits}                                                                                                from "../../core";
+import {NoLimits}                                                                                                                   from "../../core";
 
-import {applyValidator, CommandOptionReturn, GeneralOptionFlags, makeCommandOption, rerouteArguments, WithArity} from "./utils";
+import {applyValidator, CommandOptionReturn, GeneralOptionFlags, makeCommandOption, rerouteArguments, resolve, Resolver, WithArity} from "./utils";
 
 export type StringOptionNoBoolean<T, Arity extends number = 1> = GeneralOptionFlags & {
   env?: string,
@@ -30,11 +30,11 @@ export type StringPositionalFlags<T> = {
 
 function StringOption<T extends {} = string, Arity extends number = 1>(descriptor: string, opts: StringOptionNoBoolean<T, Arity> & {required: true}): CommandOptionReturn<WithArity<T, Arity>>;
 function StringOption<T extends {} = string, Arity extends number = 1>(descriptor: string, opts?: StringOptionNoBoolean<T, Arity>): CommandOptionReturn<WithArity<T, Arity> | undefined>;
-function StringOption<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: WithArity<string, Arity>, opts?: Omit<StringOptionNoBoolean<T, Arity>, 'required'>): CommandOptionReturn<WithArity<T, Arity>>;
+function StringOption<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: WithArity<string, Arity> | Resolver<WithArity<string, Arity>>, opts?: Omit<StringOptionNoBoolean<T, Arity>, 'required'>): CommandOptionReturn<WithArity<T, Arity>>;
 function StringOption<T = string>(descriptor: string, opts: StringOptionTolerateBoolean<T> & {required: true}): CommandOptionReturn<T | boolean>;
 function StringOption<T = string>(descriptor: string, opts: StringOptionTolerateBoolean<T>): CommandOptionReturn<T | boolean | undefined>;
 function StringOption<T = string>(descriptor: string, initialValue: string | boolean, opts: Omit<StringOptionTolerateBoolean<T>, 'required'>): CommandOptionReturn<T | boolean>;
-function StringOption<T = string, Arity extends number = 1>(descriptor: string, initialValueBase: StringOption<T> | WithArity<string, Arity> | string | boolean | undefined, optsBase?: StringOption<T>) {
+function StringOption<T = string, Arity extends number = 1>(descriptor: string, initialValueBase: StringOption<T> | WithArity<string, Arity> | string | boolean | Resolver<WithArity<string, Arity> | string | boolean> | undefined, optsBase?: StringOption<T>) {
   const [initialValue, opts] = rerouteArguments(initialValueBase, optsBase ?? {});
   const {arity = 1} = opts;
 
@@ -54,9 +54,9 @@ function StringOption<T = string, Arity extends number = 1>(descriptor: string, 
       });
     },
 
-    transformer(builder, key, state, context) {
+    async transformer(builder, key, state, context) {
       let usedName;
-      let currentValue = initialValue;
+      let currentValue: WithArity<string, Arity> | string | boolean | undefined;
 
       if (typeof opts.env !== `undefined` && context.env[opts.env]) {
         usedName = opts.env;
@@ -70,6 +70,8 @@ function StringOption<T = string, Arity extends number = 1>(descriptor: string, 
         usedName = name;
         currentValue = value;
       }
+
+      currentValue ??= await resolve(initialValue);
 
       if (typeof currentValue === `string`) {
         return applyValidator(usedName ?? key, currentValue, opts.validator);
@@ -94,7 +96,7 @@ function StringPositional<T = string>(opts: StringPositionalFlags<T> = {}) {
       });
     },
 
-    transformer(builder, key, state) {
+    async transformer(builder, key, state) {
       for (let i = 0; i < state.positionals.length; ++i) {
         // We skip NoLimits extras. We only care about
         // required and optional finite positionals.
@@ -145,10 +147,10 @@ export function String<T = string>(opts: StringPositionalFlags<T>): CommandOptio
  */
 export function String<T extends {} = string, Arity extends number = 1>(descriptor: string, opts: StringOptionNoBoolean<T, Arity> & {required: true}): CommandOptionReturn<WithArity<T, Arity>>;
 export function String<T extends {} = string, Arity extends number = 1>(descriptor: string, opts?: StringOptionNoBoolean<T, Arity>): CommandOptionReturn<WithArity<T, Arity> | undefined>;
-export function String<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: WithArity<string, Arity>, opts?: Omit<StringOptionNoBoolean<T, Arity>, 'required'>): CommandOptionReturn<WithArity<T, Arity>>;
+export function String<T extends {} = string, Arity extends number = 1>(descriptor: string, initialValue: WithArity<string, Arity> | Resolver<WithArity<string, Arity>>, opts?: Omit<StringOptionNoBoolean<T, Arity>, 'required'>): CommandOptionReturn<WithArity<T, Arity>>;
 export function String<T = string>(descriptor: string, opts: StringOptionTolerateBoolean<T> & {required: true}): CommandOptionReturn<T | boolean>;
 export function String<T = string>(descriptor: string, opts: StringOptionTolerateBoolean<T>): CommandOptionReturn<T | boolean | undefined>;
-export function String<T = string>(descriptor: string, initialValue: string | boolean, opts: Omit<StringOptionTolerateBoolean<T>, 'required'>): CommandOptionReturn<T | boolean>;
+export function String<T = string>(descriptor: string, initialValue: string | boolean | Resolver<string | boolean>, opts: Omit<StringOptionTolerateBoolean<T>, 'required'>): CommandOptionReturn<T | boolean>;
 
 // This function is badly typed, but it doesn't matter because the overloads provide the true public typings
 export function String(descriptor?: unknown, ...args: Array<any>) {

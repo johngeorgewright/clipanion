@@ -27,7 +27,7 @@ export function Proxy(opts: ProxyFlags = {}) {
       });
     },
 
-    transformer(builder, key, state) {
+    async transformer(builder, key, state) {
       return state.positionals.map(({value}) => value);
     },
   });
